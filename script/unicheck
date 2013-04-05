@@ -1,130 +1,86 @@
-package Uninets::Check;
+#!/usr/bin/env perl
 
-use 5.10.1;
 use strict;
-use warnings FATAL => 'all';
-use Module::Pluggable sub_name => '_plugins', require => 1, search_path => ['Uninets::Check::Modules'];
-use Moo;
+use warnings;
+use Cwd 'abs_path';
+use File::Basename;
+use Getopt::Long qw(:config auto_help pass_through);
+use 5.10.1;
+use feature 'say';
+
+use Uninets::Check;
 
 =head1 NAME
 
-Uninets::Check - Mini data collection framework!
-
-=head1 VERSION
-
-Version 0.01
+unicheck - Command line client of Uninets::Check.
 
 =cut
 
-our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
 Uninets::Check is a mini framework to collect data. Main goal was modularity and pluggability.
-On object construction all modules inside the Uninets::Check::Modules namespace are loaded and new() is called on them.
+unicheck is it's CLI.
 
-    use Uninets::Check;
+Usage: unicheck [options] [module_name] [module_params]
 
-	# create object and load modules
-    my $unicheck = Uninets::Check->new;
+=head1 OPTIONS
+
+=head2 --modules
+
+List all loaded modules
+
+	unicheck --modules
+
+=head2 --info
+
+Show info of all modules
+
+	unicheck --info
+
+Show info of HTTP module
+
+	unicheck --info HTTP
+
+=head2 --newline
+
+Adds a newline to the output.
 
 =cut
 
-=head1 ATTRIBUTES
+my $check = Uninets::Check->new;
 
-=head2 modules
+my $info = undef;
+my $plugins_flag = '';
+my $eol = '';
 
-Hash reference containing all loaded modules with module names as keys and module instances as values.
+my $option_handler = sub {
+	my ($option, @params) = @_;
+	$info = shift @params if $option eq 'info';
+	$eol  = "\n" if $option eq 'newline';
+};
 
-    # print out loaded modules
-	say for keys $unicheck->modules;
-
-=cut
-has modules => (
-	is => 'rw'
+GetOptions(
+	'info:s' => $option_handler,
+	'newline' => $option_handler,
+	'modules' => \$plugins_flag,
 );
 
-
-=head1 METHODS
-=cut
-
-sub BUILD {
-	my $self = shift;
-
-	my $modules = {};
-
-	for my $check ($self->_plugins){
-		(my $name = $check) =~ s/Uninets::Check::Modules::(.*)/$1/;
-		$modules->{$name} = $check->new;
-	}
-
-	$self->modules($modules);
+unless (keys %{$check->modules}) {
+	say 'No modules loaded. Maybe you need to install some first?';
 }
 
-sub _loaded_modules {
-	my $self = shift;
-
-	wantarray ? keys %{$self->modules} : [keys %{$self->modules}];
+if (defined $info) {
+	print $check->info($info);
+	exit 0;
 }
 
-=head2 run
-
-Runs a check modules run() method with parameters.
-
-	$unicheck->run($module, @params);
-
-=cut
-
-sub run {
-	my ($self, $module, @params) = @_;
-
-	$self->modules->{$module}->run(@params) if defined $module && defined $self->modules->{$module};
+if ($plugins_flag) {
+	print "$_\n" for keys $check->modules;
+	exit 0;
 }
 
-=head2 info
-
-Show information on loaded modules. Calls the help() method of the modules and formats the output.
-
-	# show help for all modules
-	say $unicheck->info;
-
-	# show info for specific module
-	say $unicheck->info($module);
-
-=cut
-
-sub info {
-	my ($self, $module) = @_;
-
-	# if called with out specific module get info of all modules
-	my @modules = $self->_loaded_modules;
-	if (defined $module && $module) {
-		@modules = ($module);
-	}
-	my $info = '';
-
-	for my $module (@modules){
-		$info .= "$module (" . $self->modules->{$module}->help->{description} . "):\n";
-
-		$info .= (' ' x 2) . "Available actions:\n";
-		my %actions = %{$self->modules->{$module}->help->{actions}};
-		while (my ($action, $data) = each %actions){
-			$info .= (' ' x 4) . "$action ($data->{description}):\n";
-			$info .= (' ' x 6) . "Formats:\n";
-			my %formats = %{$data->{formats}};
-			while (my ($k, $v) = each %formats){
-				$info .= (' ' x 8) . "$k: $v\n";
-			}
-			$info .= (' ' x 6) . "Parameters:\n";
-			my %params = %{$data->{params}};
-			while (my ($k, $v) = each %params){
-				$info .= (' ' x 8) . "$k: $v\n";
-			}
-		}
-	}
-
-	$info;
-}
+print $check->run(@ARGV) . $eol;
 
 =head1 AUTHOR
 
@@ -214,5 +170,3 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 =cut
-
-1; # End of Uninets::Check
